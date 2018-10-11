@@ -2,6 +2,8 @@ import React, { Component } from "react";
 import "./App.css";
 import db from "./ZPVDB";
 import uuid from "uuid";
+import remotePretender from "./ZPVSyncProtocol";
+import Dexie from "dexie";
 
 const firstnames = ["Reinhold", "Gandalf", "Elon", "Grischa", "Roman"];
 const lastnames = ["Erler", "Muñoz", "Schaller", "Musk", "Dawkins"];
@@ -10,9 +12,24 @@ class App extends Component {
   constructor(props) {
     super(props);
     this.state = {
+      isOnline: true,
+      syncStatus: "",
       untersuchungen: []
     };
   }
+
+  componentDidMount = async () => {
+    this.setState({
+      isOnline: remotePretender.isOnline,
+      untersuchungen: await db.untersuchungen.toArray()
+    });
+    db.syncable.on(
+      "statusChanged",
+      function(newStatus, url) {
+        this.setState({ syncStatus: Dexie.Syncable.StatusTexts[newStatus] });
+      }.bind(this)
+    );
+  };
 
   addRecords = async () => {
     console.log("Add some records...");
@@ -36,6 +53,19 @@ class App extends Component {
     db.untersuchungen.put(record);
   };
 
+  addRemoteRecords = async () => {
+    remotePretender.addRemoteChange(
+      "Remote first",
+      "Remote last",
+      "Alles kaputt!"
+    );
+  };
+
+  toggleOnline = () => {
+    remotePretender.isOnline = !remotePretender.isOnline;
+    this.setState({ isOnline: remotePretender.isOnline });
+  };
+
   searchRecords = event => {
     db.untersuchungen
       .where("firstname")
@@ -52,10 +82,17 @@ class App extends Component {
           <p>Dexie Example App</p>
         </header>
         <div className="Dexie">
-          <button onClick={this.addRecords}>Daten generieren</button>
-          <button onClick={this.changeRecord}>Daten ändern</button>
+          <button onClick={this.addRecords}>Daten auf Client generieren</button>
+          <button onClick={this.changeRecord}>Daten auf Client ändern</button>
+          <button onClick={this.addRemoteRecords}>
+            Daten auf Server generieren
+          </button>
+          <button onClick={this.toggleOnline}>toggle Online / Offline</button>
+          <div>Sync Status: {this.state.syncStatus}</div>
+          <div>Online: {this.state.isOnline ? "yes" : "no"}</div>
           <h1>
-            Untersuchungen suchen <input onChange={this.searchRecords} />
+            Untersuchungen suchen ({this.state.untersuchungen.length}){" "}
+            <input onChange={this.searchRecords} />
           </h1>
           {this.state.untersuchungen.map(untersuchung => {
             return (
